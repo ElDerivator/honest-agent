@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+honest_agent_events.jsonl
+*.events.jsonl
+dist/
+build/
+.venv/
+venv/
+runtime/
+assets/runtime/
+*.jsonl

@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "honest-agent"
+version = "0.3.0"
+description = "Evidence-gated task completion for autonomous agents — an agent can't mark work done unless it can prove it."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+keywords = ["llm", "agents", "governance", "verification", "memory"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+langchain = ["langchain-core>=0.3"]
+
+[project.scripts]
+honest-agent-report = "honest_agent.report:main"
+
+[tool.setuptools.packages.find]
+include = ["honest_agent*"]
+
+[tool.setuptools.package-data]
+honest_agent = ["py.typed"]
