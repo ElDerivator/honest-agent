@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/social-card.svg" alt="honest-agent — evidence-gated task completion for autonomous agents" width="720">
+</p>
+
 # honest-agent
 
 **Evidence-gated task completion for autonomous agents.** An agent can't mark work
