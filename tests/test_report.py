@@ -40,3 +40,22 @@ def test_unknown_status_is_counted_not_dropped():
     log.append({"event_type": "episode_close", "episode_status": "EMPTY"})
     log.append({"event_type": "episode_close", "episode_status": "WEIRD"})
     assert report(log).other == 2
+
+
+def test_ungated_completion_is_flagged_and_counts_as_unproven():
+    # A hand-rolled emitter that asserts COMPLETED without going through the gate
+    # leaves no verified:true. The gate would have downgraded it — so it's a lie.
+    log = _log()
+    log.append({"event_type": "episode_close", "episode_status": "COMPLETED"})  # no verified
+    r = report(log)
+    assert r.completed == 1 and r.ungated_complete == 1 and r.gate_verified == 0
+    assert r.unproven == 1 and r.corruption_rate == 1.0  # the only "done" claim was unproven
+
+
+def test_gate_verified_completion_is_not_flagged():
+    log = _log()
+    t = open_episode(vertical="t", trigger="x", log=log)
+    close_episode(t, "COMPLETED", evidence={"type": "x", "ref": "y", "ok": True}, log=log)
+    r = report(log)
+    assert r.completed == 1 and r.ungated_complete == 0 and r.gate_verified == 1
+    assert r.corruption_rate == 0.0

@@ -144,11 +144,20 @@ honest-agent-report honest_agent_events.jsonl    # or: python -m honest_agent.re
 ```
 ```
 honest-agent report
-  completed (proven):   12
-  unverified (claimed): 8
-  failed:               3
-  corruption rate:      40.0% (8/20 'done' claims had no proof)
+  completed (gate-verified): 12
+  completed (ungated):       2   <- claimed COMPLETED, gate never verified it
+  unverified (claimed):      6
+  failed:                    3
+  off-contract status:       1   <- status outside the contract; bypassed close_episode
+  corruption rate:           38.1% (8/21 'done' claims unproven)
 ```
+
+The report names two ways an agent dodges the gate: an **ungated completion**
+(COMPLETED with no verified proof — the gate would have downgraded it) and an
+**off-contract status** (a hand-rolled emitter writing something outside the
+contract). Both are bypasses `close_episode` can't force you to avoid — but the
+report always counts them, so a closed-loop gate and an open-loop one don't read
+the same.
 
 ## Tamper-evident by default
 
