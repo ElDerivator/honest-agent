@@ -42,7 +42,7 @@ pip install honest-agent             # core, zero dependencies
 pip install "honest-agent[langchain]"  # + the LangChain/LangGraph adapter
 ```
 
-## Three ways to use it
+## Four ways to use it
 
 **1 — The episode lifecycle** (explicit control):
 
@@ -84,6 +84,27 @@ handler = HonestCallbackHandler(vertical="research")
 graph.invoke(state, config={"callbacks": [handler]})
 print(handler.status)
 ```
+
+**4 — The Anthropic agent loop** (gate a bare Claude tool-use loop — no framework):
+
+```python
+from anthropic import Anthropic
+from honest_agent.adapters.anthropic import gated_agent_loop
+from honest_agent.verifiers import CommandExitsZero
+
+run = gated_agent_loop(
+    Anthropic(), model="claude-opus-4-8",
+    messages=[{"role": "user", "content": "Run the tests and report."}],
+    tools=TOOLS, execute_tool=my_executor,   # your name -> result dispatcher
+    vertical="ci",
+    evidence=CommandExitsZero("pytest -q"),  # env decides ok; omit -> UNVERIFIED
+)
+print(run.status)        # COMPLETED / UNVERIFIED / FAILED
+print(run.stop_reason)   # end_turn / refusal / max_tokens / max_iterations
+```
+
+A refusal, a `max_tokens` truncation, or a runaway loop that never converges all
+resolve to FAILED — none of them get to look like success.
 
 ## The rule, exactly
 
