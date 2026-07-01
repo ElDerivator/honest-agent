@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, Dict, Optional, Sequence
+from typing import Any, Callable, Dict, Optional, Sequence, Union
 
 from honest_agent.event_log import EventLog, default_log
 
@@ -28,6 +28,23 @@ _DARE = {
     "E": "dare_error",       # exception / stack trace (gold for contrast)
 }
 _TERMINAL = {"COMPLETED", "FAILED"}
+
+# Evidence is a computed dict or a verifier callable that produces one. The same
+# abstraction gates both ends: preconditions on open, proof on close.
+Evidence = Union[Dict[str, Any], Callable[[], Dict[str, Any]]]
+
+
+class PreconditionsFailed(RuntimeError):
+    """Raised by :func:`open_episode` when its ``preconditions`` verifier is not
+    ok — the environment isn't in a state where the work can honestly begin. The
+    would-be ``task_id`` and the failing evidence are attached; the block is also
+    recorded to the log as an ``episode_blocked`` event, so a refused dispatch is
+    counted, not invisible."""
+
+    def __init__(self, task_id: str, evidence: Dict[str, Any]) -> None:
+        self.task_id = task_id
+        self.evidence = evidence
+        super().__init__(f"preconditions not met for {task_id}: {evidence.get('ref')}")
 
 
 def _now() -> str:
@@ -46,12 +63,20 @@ def open_episode(
     task_id: Optional[str] = None,
     meta: Optional[Dict[str, Any]] = None,
     allowed_verticals: Optional[Sequence[str]] = None,
+    preconditions: Optional[Evidence] = None,
     log: Optional[EventLog] = None,
 ) -> str:
     """Open an episode (state RUNNING). Returns the task_id (generated if absent).
 
     If ``allowed_verticals`` is given, ``vertical`` must be a member or the call
     is rejected — a scope guard, not a default restriction.
+
+    A pre-dispatch gate symmetric with the close gate: if ``preconditions`` (a
+    dict or verifier, same shape as ``close_episode``'s ``evidence``) is given and
+    does not yield ``ok is True``, the episode is not opened — the block is logged
+    as ``episode_blocked`` and :class:`PreconditionsFailed` is raised. Don't start
+    work the environment says can't succeed; the oracle gates the entry, not just
+    the exit.
     """
     if not vertical or not trigger:
         raise ValueError("open_episode requires vertical and trigger")
@@ -59,6 +84,22 @@ def open_episode(
         raise ValueError(f"vertical {vertical!r} not in allowed_verticals")
     log = log or default_log()
     task_id = task_id or new_task_id(vertical)
+
+    if preconditions is not None:
+        checked = preconditions() if callable(preconditions) else preconditions
+        if not (checked and checked.get("ok") is True):
+            log.append({
+                "ts": _now(),
+                "event_type": "episode_blocked",
+                "task_id": task_id,
+                "vertical": vertical,
+                "episode_status": "BLOCKED",
+                "trigger": trigger,
+                "evidence": checked or {},
+                "payload": meta or {},
+            })
+            raise PreconditionsFailed(task_id, checked or {})
+
     log.append({
         "ts": _now(),
         "event_type": "episode_open",

@@ -131,8 +131,46 @@ close_episode(task, "COMPLETED",
 ```
 
 Built-in verifiers: `FileExists`, `ArtifactPresent`, `CommandExitsZero`,
-`MetricThreshold`, `AllOf`. A verifier is just a zero-arg callable returning an
-evidence dict — write your own.
+`MetricThreshold`, `AllOf`, plus git and receipt sources — `GitCommitPresent`
+(the commit resolves, optionally its message matches), `GitTreeClean` (nothing
+left uncommitted), `GitDiffNonEmpty` (the work actually changed files), and
+`ReceiptVerified` (a dispatch/worker receipt says what you claim). A verifier is
+just a zero-arg callable returning an evidence dict — write your own.
+
+### Corroboration — several witnesses, not one
+
+`AllOf` demands every check pass. `Corroborate` demands agreement among several
+*independent* sources: one can be gamed, three that concur is harder to fake.
+
+```python
+from honest_agent import close_episode, Corroborate, GitCommitPresent, ArtifactPresent, ReceiptVerified
+
+close_episode(task, "COMPLETED",
+              evidence=Corroborate(
+                  GitCommitPresent("HEAD", contains="fix #482"),   # git says committed
+                  ArtifactPresent("dist/app.whl"),                 # the artifact is there
+                  ReceiptVerified("runtime/dispatch.json", "status", "ok"),  # the receipt confirms
+                  min_sources=2))
+# ok only if at least two independent sources agree the work happened.
+```
+
+### Gate the entry too, not just the exit
+
+Same abstraction, other end. `open_episode(..., preconditions=<verifier>)` refuses
+to open when the environment isn't in a state where the work can honestly begin —
+don't start a deploy against a dirty tree or a missing artifact. A blocked open is
+recorded as `episode_blocked` (counted, never invisible) and raises
+`PreconditionsFailed`.
+
+```python
+from honest_agent import open_episode, PreconditionsFailed, AllOf, GitTreeClean, FileExists
+
+try:
+    task = open_episode(vertical="deploy", trigger="ci",
+                        preconditions=AllOf(GitTreeClean(), FileExists("config/prod.yaml")))
+except PreconditionsFailed as blocked:
+    ...  # work never started; the block is in the log
+```
 
 ## Report the corruption rate
 
