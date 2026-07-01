@@ -12,6 +12,13 @@ Two fingerprints of a bypassed gate, both surfaced here:
   ``verified is True``. The gate downgrades any unverified COMPLETED to
   UNVERIFIED, so a surviving COMPLETED that isn't ``verified`` never went through
   ``close_episode``: a "done" nothing blessed.
+
+And a third, the quiet one — a run that never resolved:
+
+* **orphaned** — an ``episode_open`` with no matching ``episode_close``. The agent
+  hung, crashed, or was abandoned mid-flight. It made no "done" claim, so it never
+  touches the corruption rate — but without this line it's *invisible*, and a loop
+  that never converges shouldn't get to disappear from the ledger.
 """
 from __future__ import annotations
 
@@ -29,6 +36,7 @@ class Report:
     failed: int = 0
     other: int = 0               # status outside the contract — bypassed close_episode
     ungated_complete: int = 0    # COMPLETED without verified is True — the gate never blessed it
+    orphaned: int = 0            # episode_open with no matching close — hung, crashed, abandoned
 
     @property
     def gate_verified(self) -> int:
@@ -62,6 +70,7 @@ class Report:
             f"  unverified (claimed):      {self.unverified}\n"
             f"  failed:                    {self.failed}\n"
             f"  off-contract status:       {self.other}   <- status outside the contract; bypassed close_episode\n"
+            f"  orphaned (never closed):   {self.orphaned}   <- opened, no verdict; hung or abandoned\n"
             f"  corruption rate:           {self.corruption_rate:.1%} "
             f"({self.unproven}/{self.claimed_complete} 'done' claims unproven)"
         )
@@ -71,9 +80,20 @@ def report(source: Union[EventLog, str]) -> Report:
     """Aggregate episode_close events from a log (or its path) into a Report."""
     log = source if isinstance(source, EventLog) else EventLog(source)
     r = Report()
+    opened: set = set()
+    closed: set = set()
     for ev in log.read_all():
-        if ev.get("event_type") != "episode_close":
+        event_type = ev.get("event_type")
+        if event_type == "episode_open":
+            task_id = ev.get("task_id")
+            if task_id is not None:
+                opened.add(task_id)
             continue
+        if event_type != "episode_close":
+            continue
+        task_id = ev.get("task_id")
+        if task_id is not None:
+            closed.add(task_id)
         status = ev.get("episode_status")
         if status == "COMPLETED":
             r.completed += 1
@@ -85,6 +105,7 @@ def report(source: Union[EventLog, str]) -> Report:
             r.failed += 1
         else:
             r.other += 1
+    r.orphaned = len(opened - closed)
     return r
 
 

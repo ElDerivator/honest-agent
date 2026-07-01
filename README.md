@@ -187,15 +187,19 @@ honest-agent report
   unverified (claimed):      6
   failed:                    3
   off-contract status:       1   <- status outside the contract; bypassed close_episode
+  orphaned (never closed):   4   <- opened, no verdict; hung or abandoned
   corruption rate:           38.1% (8/21 'done' claims unproven)
 ```
 
-The report names two ways an agent dodges the gate: an **ungated completion**
-(COMPLETED with no verified proof — the gate would have downgraded it) and an
-**off-contract status** (a hand-rolled emitter writing something outside the
-contract). Both are bypasses `close_episode` can't force you to avoid — but the
-report always counts them, so a closed-loop gate and an open-loop one don't read
-the same.
+The report names three ways a run dodges an honest verdict: an **ungated
+completion** (COMPLETED with no verified proof — the gate would have downgraded
+it), an **off-contract status** (a hand-rolled emitter writing something outside
+the contract), and an **orphaned** run (an `episode_open` with no matching close —
+it hung, crashed, or was abandoned). The first two are gate bypasses; the third is
+the quiet one — it makes no "done" claim, so it stays out of the corruption rate,
+but without this line a loop that never converges would simply vanish from the
+ledger. All three are counted, so a closed-loop gate and an open-loop one don't
+read the same.
 
 ## Tamper-evident by default
 
